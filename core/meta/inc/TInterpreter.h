@@ -26,11 +26,7 @@
 #include "TDictionary.h"
 #endif
 
-// We must include this as we can not forward
-// declare enums until C++11.
-#ifndef ROOT_TMethodCall
-#include "TMethodCall.h"
-#endif
+#include <set>
 
 class TClass;
 class TEnv;
@@ -79,6 +75,8 @@ public:
    virtual const char *GetIncludePath() = 0;
    virtual const char *GetSTLIncludePath() const { return ""; }
    virtual TObjArray  *GetRootMapFiles() const = 0;
+   virtual Bool_t   HasDictionary(TClass* cl) = 0;
+   virtual void     GetMissingDictionaries(TClass* cl, bool recurse, TObjArray& result) = 0;
    virtual void     Initialize() = 0;
    virtual void     InspectMembers(TMemberInspector&, void* obj, const TClass* cl) = 0;
    virtual Bool_t   IsLoaded(const char *filename) const = 0;
@@ -124,11 +122,11 @@ public:
    virtual void     CreateListOfMethods(TClass *cl) const = 0;
    virtual void     CreateListOfMethodArgs(TFunction *m) const = 0;
    virtual void     UpdateListOfMethods(TClass *cl) const = 0;
-   virtual TString  GetMangledName(TClass *cl, const char *method, const char *params, Bool_t objectIsConst = kFALSE) = 0;
-   virtual TString  GetMangledNameWithPrototype(TClass *cl, const char *method, const char *proto, Bool_t objectIsConst = kFALSE, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) = 0;
+   virtual TString  GetMangledName(TClass *cl, const char *method, const char *params) = 0;
+   virtual TString  GetMangledNameWithPrototype(TClass *cl, const char *method, const char *proto) = 0;
    virtual const char *GetInterpreterTypeName(const char *name,Bool_t full = kFALSE) = 0;
-   virtual void    *GetInterfaceMethod(TClass *cl, const char *method, const char *params, Bool_t objectIsConst = kFALSE) = 0;
-   virtual void    *GetInterfaceMethodWithPrototype(TClass *cl, const char *method, const char *proto, Bool_t objectIsConst = kFALSE, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) = 0;
+   virtual void    *GetInterfaceMethod(TClass *cl, const char *method, const char *params) = 0;
+   virtual void    *GetInterfaceMethodWithPrototype(TClass *cl, const char *method, const char *proto) = 0;
    virtual void     Execute(const char *function, const char *params, int *error = 0) = 0;
    virtual void     Execute(TObject *obj, TClass *cl, const char *method, const char *params, int *error = 0) = 0;
    virtual void     Execute(TObject *obj, TClass *cl, TMethod *method, TObjArray *params, int *error = 0) = 0;
@@ -168,11 +166,8 @@ public:
    virtual int    UnloadFile(const char * /* path */) const {return 0;}
    virtual TInterpreterValue *CreateTemporary() { return 0; }
 
-   // core/meta helper functions.
-   virtual TMethodCall::EReturnType MethodCallReturnType(TFunction *func) const = 0;
-
    // CallFunc interface
-   virtual void   CallFunc_Delete(CallFunc_t * /* func */) const {;}
+   virtual void   CallFunc_Delete(void * /* func */) const {;}
    virtual void   CallFunc_Exec(CallFunc_t * /* func */, void * /* address */) const {;}
    virtual void   CallFunc_Exec(CallFunc_t * /* func */, void * /* address */, TInterpreterValue& /* val */) const {;}
    virtual Long_t    CallFunc_ExecInt(CallFunc_t * /* func */, void * /* address */) const {return 0;}
@@ -191,13 +186,9 @@ public:
    virtual void   CallFunc_SetArg(CallFunc_t * /* func */, ULong64_t /* param */) const {;}
    virtual void   CallFunc_SetArgArray(CallFunc_t * /* func */, Long_t * /* paramArr */, Int_t /* nparam */) const {;}
    virtual void   CallFunc_SetArgs(CallFunc_t * /* func */, const char * /* param */) const {;}
-   virtual void   CallFunc_SetFunc(CallFunc_t * /* func */, ClassInfo_t * /* info */, const char * /* method */, const char * /* params */, bool /* objectIsConst */, Long_t * /* Offset */) const {;}
    virtual void   CallFunc_SetFunc(CallFunc_t * /* func */, ClassInfo_t * /* info */, const char * /* method */, const char * /* params */, Long_t * /* Offset */) const {;}
    virtual void   CallFunc_SetFunc(CallFunc_t * /* func */, MethodInfo_t * /* info */) const {;}
-   virtual void   CallFunc_SetFuncProto(CallFunc_t * /* func */, ClassInfo_t * /* info */, const char * /* method */, const char * /* proto */, Long_t * /* Offset */, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) const {;}
-   virtual void   CallFunc_SetFuncProto(CallFunc_t * /* func */, ClassInfo_t * /* info */, const char * /* method */, const char * /* proto */, bool /* objectIsConst */, Long_t * /* Offset */, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) const {;}
-   virtual void   CallFunc_SetFuncProto(CallFunc_t* func, ClassInfo_t* info, const char* method, const std::vector<TypeInfo_t*> &proto, Long_t* Offset, ROOT::EFunctionMatchMode mode = ROOT::kConversionMatch) const = 0;
-   virtual void   CallFunc_SetFuncProto(CallFunc_t* func, ClassInfo_t* info, const char* method, const std::vector<TypeInfo_t*> &proto, bool objectIsConst, Long_t* Offset, ROOT::EFunctionMatchMode mode = ROOT::kConversionMatch) const = 0;
+   virtual void   CallFunc_SetFuncProto(CallFunc_t * /* func */, ClassInfo_t * /* info */, const char * /* method */, const char * /* proto */, Long_t * /* Offset */) const {;}
 
 
    // ClassInfo interface
@@ -209,7 +200,7 @@ public:
    virtual ClassInfo_t  *ClassInfo_Factory() const {return 0;}
    virtual ClassInfo_t  *ClassInfo_Factory(ClassInfo_t * /* cl */) const {return 0;}
    virtual ClassInfo_t  *ClassInfo_Factory(const char * /* name */) const {return 0;}
-   virtual int    ClassInfo_GetMethodNArg(ClassInfo_t * /* info */, const char * /* method */,const char * /* proto */, Bool_t /* objectIsConst */ = false, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) const {return 0;}
+   virtual int    ClassInfo_GetMethodNArg(ClassInfo_t * /* info */, const char * /* method */,const char * /* proto */) const {return 0;}
    virtual Bool_t ClassInfo_HasDefaultConstructor(ClassInfo_t * /* info */) const {return 0;}
    virtual Bool_t ClassInfo_HasMethod(ClassInfo_t * /* info */, const char * /* name */) const {return 0;}
    virtual void   ClassInfo_Init(ClassInfo_t * /* info */, const char * /* funcname */) const {;}
@@ -218,8 +209,7 @@ public:
    virtual Bool_t ClassInfo_IsEnum(const char * /* name */) const {return 0;}
    virtual Bool_t ClassInfo_IsLoaded(ClassInfo_t * /* info */) const {return 0;}
    virtual Bool_t ClassInfo_IsValid(ClassInfo_t * /* info */) const {return 0;}
-   virtual Bool_t ClassInfo_IsValidMethod(ClassInfo_t * /* info */, const char * /* method */,const char * /* proto */, Long_t * /* offset */, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) const {return 0;}
-   virtual Bool_t ClassInfo_IsValidMethod(ClassInfo_t * /* info */, const char * /* method */,const char * /* proto */, Bool_t /* objectIsConst */, Long_t * /* offset */, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) const {return 0;}
+   virtual Bool_t ClassInfo_IsValidMethod(ClassInfo_t * /* info */, const char * /* method */,const char * /* proto */, Long_t * /* offset */) const {return 0;}
    virtual int    ClassInfo_Next(ClassInfo_t * /* info */) const {return 0;}
    virtual void  *ClassInfo_New(ClassInfo_t * /* info */) const {return 0;}
    virtual void  *ClassInfo_New(ClassInfo_t * /* info */, int /* n */) const {return 0;}
@@ -271,14 +261,13 @@ public:
    virtual MethodInfo_t  *MethodInfo_Factory() const {return 0;}
    virtual MethodInfo_t  *MethodInfo_Factory(ClassInfo_t * /*clinfo*/) const {return 0;}
    virtual MethodInfo_t  *MethodInfo_FactoryCopy(MethodInfo_t * /* minfo */) const {return 0;}
-   virtual void  *MethodInfo_InterfaceMethod(MethodInfo_t * /* minfo */) const {return 0;}
+   virtual MethodInfo_t  *MethodInfo_InterfaceMethod(MethodInfo_t * /* minfo */) const {return 0;}
    virtual Bool_t MethodInfo_IsValid(MethodInfo_t * /* minfo */) const {return 0;}
    virtual int    MethodInfo_NArg(MethodInfo_t * /* minfo */) const {return 0;}
    virtual int    MethodInfo_NDefaultArg(MethodInfo_t * /* minfo */) const {return 0;}
    virtual int    MethodInfo_Next(MethodInfo_t * /* minfo */) const {return 0;}
    virtual Long_t MethodInfo_Property(MethodInfo_t * /* minfo */) const {return 0;}
    virtual TypeInfo_t  *MethodInfo_Type(MethodInfo_t * /* minfo */) const {return 0;}
-   virtual TMethodCall::EReturnType MethodInfo_MethodCallReturnType(MethodInfo_t* minfo) const = 0;
    virtual const char *MethodInfo_GetMangledName(MethodInfo_t * /* minfo */) const {return 0;}
    virtual const char *MethodInfo_GetPrototype(MethodInfo_t * /* minfo */) const {return 0;}
    virtual const char *MethodInfo_Name(MethodInfo_t * /* minfo */) const {return 0;}
@@ -297,13 +286,12 @@ public:
    virtual const char *MethodArgInfo_DefaultValue(MethodArgInfo_t * /* marginfo */) const {return 0;}
    virtual const char *MethodArgInfo_Name(MethodArgInfo_t * /* marginfo */) const {return 0;}
    virtual const char *MethodArgInfo_TypeName(MethodArgInfo_t * /* marginfo */) const {return 0;}
-   virtual std::string MethodArgInfo_TypeNormalizedName(MethodArgInfo_t * /* marginfo */) const = 0; 
+   virtual std::string MethodArgInfo_TypeNormalizedName(MethodArgInfo_t * /* marginfo */) const {return 0;}
 
 
    // TypeInfo interface
    virtual void    TypeInfo_Delete(TypeInfo_t * /* tinfo */) const {;}
    virtual TypeInfo_t *TypeInfo_Factory() const {return 0;}
-   virtual TypeInfo_t *TypeInfo_Factory(const char* /* name */) const {return 0;}
    virtual TypeInfo_t *TypeInfo_FactoryCopy(TypeInfo_t * /* tinfo */) const {return 0;}
    virtual void   TypeInfo_Init(TypeInfo_t * /* tinfo */, const char * /* funcname */) const {;}
    virtual Bool_t TypeInfo_IsValid(TypeInfo_t * /* tinfo */) const {return 0;}
@@ -317,7 +305,6 @@ public:
    // TypedefInfo interface
    virtual void   TypedefInfo_Delete(TypedefInfo_t * /* tinfo */) const {;}
    virtual TypedefInfo_t  *TypedefInfo_Factory() const {return 0;}
-   virtual TypedefInfo_t  *TypedefInfo_Factory(const char *) const {return 0;}
    virtual TypedefInfo_t  *TypedefInfo_FactoryCopy(TypedefInfo_t * /* tinfo */) const {return 0;}
    virtual void   TypedefInfo_Init(TypedefInfo_t * /* tinfo */, const char * /* funcname */) const {;}
    virtual Bool_t TypedefInfo_IsValid(TypedefInfo_t * /* tinfo */) const {return 0;}
@@ -334,7 +321,7 @@ public:
 };
 
 
-typedef TInterpreter *CreateInterpreter_t(void* shlibHandle);
+typedef TInterpreter *CreateInterpreter_t();
 typedef void *DestroyInterpreter_t(TInterpreter*);
 
 #ifndef __CINT__
