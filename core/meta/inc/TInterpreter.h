@@ -75,7 +75,11 @@ public:
    virtual const char *GetIncludePath() = 0;
    virtual const char *GetSTLIncludePath() const { return ""; }
    virtual TObjArray  *GetRootMapFiles() const = 0;
+<<<<<<< HEAD
    virtual Bool_t   HasDictionary(TClass* cl) = 0;
+=======
+   virtual Bool_t   HasDictionary(TClass* cl) const = 0;
+>>>>>>> Fix semantics and the return structure of the classes with no dictionary.
    virtual void     GetMissingDictionaries(TClass* cl, bool recurse, TObjArray& result) = 0;
    virtual void     Initialize() = 0;
    virtual void     InspectMembers(TMemberInspector&, void* obj, const TClass* cl) = 0;
