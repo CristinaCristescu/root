@@ -4517,7 +4517,7 @@ void TCling::UpdateListsOnUnloaded(const cling::Transaction &T)
          if (isa<VarDecl>(*DI) || isa<EnumConstantDecl>(*DI)) {
             clang::ValueDecl* VD = dyn_cast<ValueDecl>(*DI);
             var = (TDataMember*)globals->FindObject(VD->getNameAsString().c_str());
-            if (var && var->IsValid()) {
+            if (var) {
                // Unload the global by setting the DataMemberInfo_t to 0
                globals->Unload(var);
                var->Update(0);
@@ -4525,7 +4525,7 @@ void TCling::UpdateListsOnUnloaded(const cling::Transaction &T)
          // Deal with global functions.
          } else if (const FunctionDecl* FD = dyn_cast<FunctionDecl>(*DI)) {
             function = (TFunction*)functions->FindObject(FD->getNameAsString().c_str());
-            if (function && function->IsValid()) {
+            if (function) {
                functions->Unload(function);
                function->Update(0);
             }
